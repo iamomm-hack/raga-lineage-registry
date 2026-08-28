@@ -1,0 +1,23 @@
+# Foundry outputs and local cache
+cache/
+out/
+broadcast/
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Local tool and editor state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# JavaScript dependencies, if helper scripts are added later
+node_modules/
+
+# Coverage and gas reports
+coverage/
+lcov.info
+gas-snapshot
