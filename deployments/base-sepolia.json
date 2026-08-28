@@ -1,0 +1,38 @@
+{
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "deployedAt": "2026-08-28T21:34:28Z",
+  "deployer": "0x27d5b1c829bce7feAC2A5bcA458CCc9db11D4aB2",
+  "contracts": {
+    "ragaRegistry": {
+      "address": "0x456a2E96430C31172Ca2f602D07b69fe0767B96a",
+      "transactionHash": "0x50742ea97db7bdbcb7df79c08dd025350541f298883e406eed5ed00c0e296766",
+      "blockNumber": 46092290,
+      "explorerUrl": "https://sepolia.basescan.org/address/0x456a2E96430C31172Ca2f602D07b69fe0767B96a"
+    },
+    "eas": {
+      "address": "0x4200000000000000000000000000000000000021"
+    },
+    "schemaRegistry": {
+      "address": "0x4200000000000000000000000000000000000020"
+    }
+  },
+  "schemas": {
+    "lineage": {
+      "uid": "0xf044cb02b336aaa598c4d2f8530abcbf5cbfb401d87fb90f8a390975319a06bf",
+      "schema": "address student,address teacher,uint16 teacherShareBps",
+      "resolver": "0x0000000000000000000000000000000000000000",
+      "revocable": true,
+      "registrationTransactionHash": "0x31fe0bb4c54b79f2e4cda603c1b3712397b162d54406d4a0553e6d186a5acea2",
+      "blockNumber": 46092288
+    },
+    "license": {
+      "uid": "0x1da6bebc9d2bf5b7d427cac869f6a876cdd5ce0f29c1a8c729f3c89d0dba6c47",
+      "schema": "bytes32 assetId,address performer,address licensee,bytes32 lineageUID",
+      "resolver": "0x0000000000000000000000000000000000000000",
+      "revocable": true,
+      "registrationTransactionHash": "0x57c16e690e7966bfb5871917fd227e328a49ac789d957b59b7d5c2b8d74fa613",
+      "blockNumber": 46092289
+    }
+  }
+}

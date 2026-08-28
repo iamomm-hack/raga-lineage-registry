@@ -187,28 +187,31 @@ Expected result at this revision:
 The tests deploy genuine local EAS and SchemaRegistry contracts and register both schemas. They do
 not replace EAS with a mapping mock.
 
-## Base Sepolia readiness
+## Live Base Sepolia deployment
 
-No deployment is included or claimed. The
-[pinned official EAS package](lib/eas-contracts/README.md#base-sepolia) identifies these Base
-Sepolia contracts (chain ID `84532`):
+RagaLineage is deployed on Base Sepolia (chain ID `84532`). Public deployment metadata is also
+available in [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
 
 | Contract | Address |
 | --- | --- |
-| EAS | `0x4200000000000000000000000000000000000021` |
-| SchemaRegistry | `0x4200000000000000000000000000000000000020` |
+| RagaRegistry | [`0x456a2E96430C31172Ca2f602D07b69fe0767B96a`](https://sepolia.basescan.org/address/0x456a2E96430C31172Ca2f602D07b69fe0767B96a) |
+| Official EAS | [`0x4200000000000000000000000000000000000021`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000021) |
+| Official SchemaRegistry | [`0x4200000000000000000000000000000000000020`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000020) |
 
-A deployment workflow should:
+| Schema | UID | Resolver | Revocable |
+| --- | --- | --- | --- |
+| Lineage | `0xf044cb02b336aaa598c4d2f8530abcbf5cbfb401d87fb90f8a390975319a06bf` | Zero address | Yes |
+| Commercial license | `0x1da6bebc9d2bf5b7d427cac869f6a876cdd5ce0f29c1a8c729f3c89d0dba6c47` | Zero address | Yes |
 
-1. Register the revocable lineage and license schemas with the official SchemaRegistry.
-2. Capture both returned schema UIDs.
-3. Deploy `RagaRegistry(IEAS, lineageSchemaUID, licenseSchemaUID)` using the official EAS address.
-4. Grant `LINEAGE_ATTESTER_ROLE` and `LICENSOR_ROLE` deliberately after deployment.
-5. Verify the deployment and schema records before publishing addresses.
+The deployment transaction is
+[`0x50742e...96766`](https://sepolia.basescan.org/tx/0x50742ea97db7bdbcb7df79c08dd025350541f298883e406eed5ed00c0e296766).
+Fresh RPC reads confirmed the deployed bytecode, official EAS address, both immutable schema UIDs,
+both SchemaRegistry records, and the deployer's `DEFAULT_ADMIN_ROLE`.
 
-It would require untracked `PRIVATE_KEY` and `BASE_SEPOLIA_RPC_URL` environment values. The repository
-provides blank placeholders in `.env.example`; no key, authenticated RPC URL, broadcast output, or
-deployment claim is tracked.
+The reproducible Foundry workflow is in `script/DeployBaseSepolia.s.sol`. It requires untracked
+`PRIVATE_KEY` and `BASE_SEPOLIA_RPC_URL` values; blank placeholders are provided in `.env.example`.
+The script rejects every chain except Base Sepolia. Neither credentials nor Foundry broadcast/cache
+output are tracked.
 
 ## Intentional scope and limitations
 
@@ -219,7 +222,7 @@ deployment claim is tracked.
   deployment.
 - `DEFAULT_ADMIN_ROLE` grants the roles allowed to propose lineage and issue licenses.
 - No frontend or nontechnical query interface is included.
-- Base Sepolia deployment is optional and is not currently included.
+- The Base Sepolia deployer retains `DEFAULT_ADMIN_ROLE`; operational roles are granted explicitly.
 
 ## Toolchain
 
