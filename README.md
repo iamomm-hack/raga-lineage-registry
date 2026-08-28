@@ -10,6 +10,36 @@ relationship from a unilateral claim. RagaLineage makes the lineage graph load-b
 must confirm claims, licenses are valid only while their captured lineage remains valid, and royalty
 recipients are calculated from the current verified graph.
 
+## Judge Quick Start
+
+```bash
+git clone --recurse-submodules https://github.com/iamomm-hack/raga-lineage-registry
+cd raga-lineage-registry
+forge test
+```
+
+Expected: `46 passed, 0 failed, 0 skipped`.
+
+Review the core contract in [`src/RagaRegistry.sol`](src/RagaRegistry.sol), then the focused
+[`lineage`](test/RagaRegistry.Lineage.t.sol), [`license`](test/RagaRegistry.License.t.sol), and
+[`royalty`](test/RagaRegistry.Royalty.t.sol) test suites. Live public addresses and schema UIDs are
+recorded in [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
+
+## 60-Second Demo
+
+1. The admin grants `LINEAGE_ATTESTER_ROLE` to Devika; Devika calls
+   `proposeTeacher(guruA, 2_000)`.
+2. Guru A calls `acceptStudent(devika)`, causing `RagaRegistry` to create a genuine lineage EAS
+   attestation.
+3. The admin grants `LICENSOR_ROLE`; the licensor calls
+   `issueLicense(assetId, devika, platform, expiry)`.
+4. `licenseState(assetId, platform)` returns `Active`, and
+   `resolveLicensedRoyalties(assetId, platform, 10_000)` derives recipients from EAS lineage.
+5. For `Devika -> Guru A = 20%` and `Guru A -> Guru B = 25%`, the allocations are Devika `8,000`,
+   Guru A `1,500`, and Guru B `500`.
+6. Guru A calls `revokeLineage(devika)`; the same license now returns `InvalidLineage`, and
+   `isLicenseValid(assetId, platform)` returns `false`.
+
 ## What is implemented
 
 - Teacher-confirmed, role-gated `student -> teacher` lineage attestations.
@@ -192,6 +222,9 @@ not replace EAS with a mapping mock.
 RagaLineage is deployed on Base Sepolia (chain ID `84532`). Public deployment metadata is also
 available in [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
 
+- Network: **Base Sepolia**
+- Chain ID: **84532**
+
 | Contract | Address |
 | --- | --- |
 | RagaRegistry | [`0x456a2E96430C31172Ca2f602D07b69fe0767B96a`](https://sepolia.basescan.org/address/0x456a2E96430C31172Ca2f602D07b69fe0767B96a) |
@@ -207,6 +240,7 @@ The deployment transaction is
 [`0x50742e...96766`](https://sepolia.basescan.org/tx/0x50742ea97db7bdbcb7df79c08dd025350541f298883e406eed5ed00c0e296766).
 Fresh RPC reads confirmed the deployed bytecode, official EAS address, both immutable schema UIDs,
 both SchemaRegistry records, and the deployer's `DEFAULT_ADMIN_ROLE`.
+The live deployment uses the genuine official EAS and SchemaRegistry predeploys, not local mocks.
 
 The reproducible Foundry workflow is in `script/DeployBaseSepolia.s.sol`. It requires untracked
 `PRIVATE_KEY` and `BASE_SEPOLIA_RPC_URL` values; blank placeholders are provided in `.env.example`.
