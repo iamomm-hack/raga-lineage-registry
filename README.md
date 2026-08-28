@@ -1,93 +1,230 @@
 # RagaLineage
 
-Foundry workspace for Road To Devcon II: **Who Taught You That Raga?**
+RagaLineage is an EAS-backed registry for **Who Taught You That Raga?** at Road To Devcon II. It
+models verified guru-shishya lineage, commercial licenses that depend on that lineage, and
+multi-generation royalty calculations.
 
-Verified lineage, commercial-license validity, and royalty calculation are implemented and tested
-against genuine EAS contracts. ETH payout execution is intentionally not implemented.
+Traditional licensing usually pays the performer it can identify. That loses the teaching lineage
+that shaped the performance and gives a platform no reliable way to distinguish a real teacher
+relationship from a unilateral claim. RagaLineage makes the lineage graph load-bearing: teachers
+must confirm claims, licenses are valid only while their captured lineage remains valid, and royalty
+recipients are calculated from the current verified graph.
 
-## Minimal architecture
+## What is implemented
 
-- `RagaRegistry` uses OpenZeppelin `AccessControl` and the official EAS contracts.
-- A student with `LINEAGE_ATTESTER_ROLE` proposes one `student -> teacher` edge. The pending proposal
-  is only workflow state and is not verified lineage.
-- Only the exact proposed teacher can accept. Acceptance creates the authoritative EAS lineage
-  attestation containing `student`, `teacher`, and `teacherShareBps`.
-- Confirmation also verifies that the student still has `LINEAGE_ATTESTER_ROLE`, making the EAS
-  lineage-creation path visibly role-gated without redundant performer and teacher roles.
-- The registry is the EAS attester. A teacher can call the registry's authorization-checked revoke
-  function, after which the registry revokes the teacher's confirmed edge in EAS.
-- Each student has at most one current verified teacher, producing a bounded linear guru chain.
-  Teacher acceptance walks the live upstream EAS chain and rejects edges that would create a cycle.
-- An explicitly granted `LICENSOR_ROLE` issues a commercial-license EAS attestation for an
-  `assetId + licensee` pair. The attestation captures the performer's exact lineage UID.
-- License indexes and original-issuer metadata are discovery and revocation-authority data only.
-  License validity is recalculated from the current license and captured lineage EAS records.
-- License states distinguish `Unlicensed`, `Active`, `Expired`, `Revoked`, and `InvalidLineage`.
-- The original issuer alone can ask the registry to revoke a license through genuine EAS revocation.
-- Mappings may hold pending proposals and index EAS UIDs for discovery, but EAS attestations remain
-  authoritative for confirmed lineage and license validity.
-- Lineage and license state read current EAS revocation and expiration data at query time.
-- Standalone royalty resolution follows the performer's current EAS-backed lineage. Licensed
-  resolution first requires the license's live state to be `Active`, preventing a replacement
-  lineage from reviving an old license tied to a revoked edge.
+- Teacher-confirmed, role-gated `student -> teacher` lineage attestations.
+- Genuine Ethereum Attestation Service schemas, attestations, reads, and revocations.
+- Commercial licenses indexed by `assetId + licensee`, with live expiry and revocation checks.
+- License invalidation when the exact lineage UID captured at issuance is no longer valid.
+- Bounded, cycle-safe, multi-hop royalty calculation with exact amount conservation.
+- 46 Foundry tests using real local `EAS` and `SchemaRegistry` contracts.
+
+Mappings only locate pending workflows and EAS UIDs. They never cache whether lineage or a license
+is valid; current EAS attestations are the source of truth.
+
+## Architecture
+
+```text
+Student with LINEAGE_ATTESTER_ROLE
+  |
+  | proposeTeacher(teacher, shareBps)
+  v
+Pending proposal (not verified lineage)
+  |
+  | exact proposed teacher calls acceptStudent(student)
+  v
+RagaRegistry ---------------------------------------------------+
+  |                                                            |
+  | EAS.attest(lineage schema)                                 | resolveRoyalties()
+  v                                                            |
+Verified lineage attestation                                   |
+  |                                                            |
+  | issueLicense() requires active lineage                     |
+  v                                                            v
+Commercial license attestation                         Live EAS lineage traversal
+  |                                                    Performer -> Guru -> Guru's Guru
+  | licenseState() reads license + captured lineage
+  v
+Unlicensed / Active / Expired / Revoked / InvalidLineage
+```
+
+The registry is the EAS `attester` because it calls EAS. Teacher authorization is nevertheless
+transactionally real: only the exact teacher stored in the pending proposal can trigger the lineage
+attestation. Direct third-party attestations are ignored because valid records must be indexed by
+the registry and have `attester == address(RagaRegistry)`.
+
+## Attest -> License -> Check -> Revoke
+
+1. **Student proposes a teacher.** A student granted `LINEAGE_ATTESTER_ROLE` calls
+   `proposeTeacher`. This stores pending workflow data only; `hasValidLineage` remains false.
+2. **The exact teacher confirms.** The proposed teacher calls `acceptStudent`. The function checks
+   the caller, rechecks the student's role, rejects cycles, and exposes no bypass for an admin or a
+   different teacher.
+3. **The registry creates genuine EAS lineage.** `acceptStudent` calls `IEAS.attest` with the lineage
+   schema, the student as recipient, the registry as EAS attester, and ABI-encoded student, teacher,
+   and share data. The revocable EAS record becomes authoritative.
+4. **A licensor issues a commercial license.** An account granted `LICENSOR_ROLE` calls
+   `issueLicense`. The performer must have active lineage. The license records its expiration and
+   captures the performer's exact current lineage UID; it cannot silently switch to a replacement.
+5. **Anyone checks current validity.** `licenseState` and `isLicenseValid` reread the license EAS
+   record and its captured lineage EAS record on every call. There is no cached validity boolean.
+6. **The teacher revokes lineage.** `revokeLineage` authorizes the encoded teacher and calls genuine
+   `IEAS.revoke`. A dependent, otherwise-unrevoked license immediately becomes `InvalidLineage`.
+
+The original license issuer can independently call `revokeLicense`, making its live state
+`Revoked`. Reaching the EAS expiration timestamp makes it `Expired`; a never-issued pair remains
+`Unlicensed`.
+
+## EAS schemas
+
+### Lineage
+
+```text
+address student,address teacher,uint16 teacherShareBps
+```
+
+| Field | Meaning |
+| --- | --- |
+| `student` | Performer or teacher whose upstream relationship is being verified |
+| `teacher` | Exact teacher who transactionally accepted the relationship |
+| `teacherShareBps` | Share of value arriving at the student that moves one generation upstream |
+
+The student is the EAS recipient. The registry is the EAS attester. Lineage attestations are
+revocable and non-expiring, while readers still validate both revocation and expiration metadata.
+
+### Commercial license
+
+```text
+bytes32 assetId,address performer,address licensee,bytes32 lineageUID
+```
+
+| Field | Meaning |
+| --- | --- |
+| `assetId` | Recording or composition identifier |
+| `performer` | Performer whose verified lineage backs the license |
+| `licensee` | Commercial user and EAS recipient |
+| `lineageUID` | Exact verified lineage attestation captured when the license was issued |
+
+License expiry lives in EAS attestation metadata rather than encoded schema data. Licenses are
+revocable, and live EAS state remains authoritative for `Active`, `Expired`, `Revoked`, and
+`InvalidLineage` outcomes.
 
 ## Cascading royalties
 
-At each `student -> teacher` edge, the student keeps the remainder after their recorded
-`teacherShareBps`; only the teacher portion continues upstream. For example:
+At each active `student -> teacher` edge:
+
+```text
+teacherAmount = incomingAmount * teacherShareBps / 10,000
+studentAmount = incomingAmount - teacherAmount
+```
+
+Only `teacherAmount` continues upstream. For the tested example:
 
 ```text
 Devika -> Guru A: 20%
 Guru A -> Guru B: 25%
-Gross amount:       10,000
+Gross royalty: 10,000
 
-Devika keeps:        8,000
-Guru A keeps:        1,500
-Guru B keeps:          500
-Total:              10,000
+Devika: 8,000
+Guru A: 1,500
+Guru B:   500
+Total: 10,000
 ```
 
-Every hop obtains the current lineage UID from the discovery index and validates its genuine EAS
-attestation. A revoked or expired edge is therefore ignored immediately. Integer division rounds
-the teacher portion down, leaving dust with the current student and conserving the exact gross
-amount. Zero-amount entries are omitted.
+Solidity integer division rounds the teacher portion down, so dust stays with the current node and
+allocations always sum to the gross amount. Zero-value entries are omitted. Standalone
+`resolveRoyalties` follows the current graph and stops at revoked, expired, or invalid edges.
+`resolveLicensedRoyalties` first requires the license's live state to be `Active`.
 
-Traversal is linear and capped at 16 edges. A chain ending at that boundary resolves normally; an
-additional active upstream edge causes `LineageDepthExceeded` rather than returning a truncated
-allocation. These functions calculate allocations only and never transfer ETH.
+Traversal is bounded at `MAX_LINEAGE_DEPTH == 16`. A chain ending there resolves; another active
+upstream edge causes `LineageDepthExceeded` instead of returning an incomplete result.
 
-## EAS schemas
+## Public API
+
+| Function | Purpose |
+| --- | --- |
+| `proposeTeacher(teacher, shareBps)` | Role-gated student proposal; does not create verified lineage |
+| `acceptStudent(student)` | Exact teacher confirmation and genuine EAS lineage attestation |
+| `revokeLineage(student)` | Encoded teacher revokes the current lineage through EAS |
+| `lineageState(student)` | Returns current EAS-backed lineage state |
+| `issueLicense(assetId, performer, licensee, expiry)` | Licensor creates a revocable EAS license tied to current lineage |
+| `licenseState(assetId, licensee)` | Returns live license, expiry, revocation, and lineage-dependent state |
+| `isLicenseValid(assetId, licensee)` | Convenience check for `LicenseState.Active` |
+| `revokeLicense(assetId, licensee)` | Original issuer revokes the indexed license through EAS |
+| `resolveRoyalties(performer, amount)` | Calculates allocations from the current lineage graph |
+| `resolveLicensedRoyalties(assetId, licensee, amount)` | Requires an active license, then resolves its performer's graph |
+
+## Scored requirements
+
+| Official requirement | Implementation | Direct test evidence |
+| --- | --- | --- |
+| 1. Teacher confirmation | `proposeTeacher`, `acceptStudent` exact-caller check | `testWrongTeacherCannotAccept`, `testExactTeacherAcceptanceCreatesGenuineEASRecord` |
+| 2. Time-of-use license validity | `licenseState`, `_readLicense`, live captured-lineage read | `testExpiryIsCheckedAtTimeOfUse`, `testLicenseRemainsBoundToCapturedLineageUID` |
+| 3. Genuine EAS schema | Official `IEAS.attest/revoke/getAttestation`; real schema fixtures | `testExactTeacherAcceptanceCreatesGenuineEASRecord`, `testIssueCreatesGenuineEASLicense` |
+| 4. Graph-derived royalties | `resolveRoyalties`, bounded EAS-backed traversal | `testMultiHopLineageCascadesRecordedShares` |
+| 5. Revocation changes license state | `revokeLicense` -> `Revoked`; `revokeLineage` -> `InvalidLineage` | `testOriginalIssuerRevocationChangesLiveEASState`, `testTeacherLineageRevocationInvalidatesUnrevokedLicense` |
+| 6. Role-gated lineage | `onlyRole(LINEAGE_ATTESTER_ROLE)` plus acceptance-time recheck | `testRoleGatingRejectsUnauthorizedThenAllowsGrantedStudent`, `testStudentRoleIsRecheckedAtAcceptance` |
+| 7. Distinct Unlicensed/Expired states | Public `LicenseState` and `licenseState` | `testExpiredDiffersFromNeverLicensed` |
+| 8. No tracked credentials | `.env`/broadcast outputs ignored; example values blank | Repository credential scan and `.env.example` inspection |
+
+## Test locally
+
+Prerequisite: [Foundry](https://book.getfoundry.sh/getting-started/installation).
+
+```bash
+git clone --recurse-submodules https://github.com/iamomm-hack/raga-lineage-registry
+cd raga-lineage-registry
+forge build
+forge test -vvv
+```
+
+Expected result at this revision:
 
 ```text
-address student,address teacher,uint16 teacherShareBps
-bytes32 assetId,address performer,address licensee,bytes32 lineageUID
+46 passed, 0 failed, 0 skipped
 ```
 
-## Official scored checks
+The tests deploy genuine local EAS and SchemaRegistry contracts and register both schemas. They do
+not replace EAS with a mapping mock.
 
-1. Teacher confirmation is required for a verified lineage claim.
-2. License validity is read from current attestation state at time of use.
-3. Genuine EAS schemas and attestations are used.
-4. Royalty shares are resolved through the lineage graph.
-5. License or lineage revocation changes subsequent license state.
-6. Creating lineage claims is role-gated.
-7. Unlicensed and expired/revoked states are distinguishable.
-8. Tracked files contain no credentials.
+## Base Sepolia readiness
+
+No deployment is included or claimed. The
+[pinned official EAS package](lib/eas-contracts/README.md#base-sepolia) identifies these Base
+Sepolia contracts (chain ID `84532`):
+
+| Contract | Address |
+| --- | --- |
+| EAS | `0x4200000000000000000000000000000000000021` |
+| SchemaRegistry | `0x4200000000000000000000000000000000000020` |
+
+A deployment workflow should:
+
+1. Register the revocable lineage and license schemas with the official SchemaRegistry.
+2. Capture both returned schema UIDs.
+3. Deploy `RagaRegistry(IEAS, lineageSchemaUID, licenseSchemaUID)` using the official EAS address.
+4. Grant `LINEAGE_ATTESTER_ROLE` and `LICENSOR_ROLE` deliberately after deployment.
+5. Verify the deployment and schema records before publishing addresses.
+
+It would require untracked `PRIVATE_KEY` and `BASE_SEPOLIA_RPC_URL` environment values. The repository
+provides blank placeholders in `.env.example`; no key, authenticated RPC URL, broadcast output, or
+deployment claim is tracked.
+
+## Intentional scope and limitations
+
+- One current teacher edge per student produces a linear lineage rather than an arbitrary DAG.
+- Teacher acceptance prevents cycles; royalty traversal is bounded to 16 active edges.
+- Royalty functions calculate allocations only. They do not transfer ETH or maintain balances.
+- Official EAS and schema UIDs are immutable constructor configuration and must be verified at
+  deployment.
+- `DEFAULT_ADMIN_ROLE` grants the roles allowed to propose lineage and issue licenses.
+- No frontend or nontechnical query interface is included.
+- Base Sepolia deployment is optional and is not currently included.
 
 ## Toolchain
 
-- Foundry `1.8.1`
-- forge-std `v1.16.2`
-- OpenZeppelin Contracts `v5.7.0`
-- EAS Contracts `v1.4.0`
 - Solidity `0.8.28`
-
-## Commands
-
-```sh
-forge fmt --check
-forge build
-forge test
-```
-
-Copy `.env.example` to an untracked `.env` only when deployment work begins. Never commit secrets.
+- Foundry `1.8.1`
+- EAS Contracts `v1.4.0`
+- OpenZeppelin Contracts `v5.7.0`
+- forge-std `v1.16.2`
