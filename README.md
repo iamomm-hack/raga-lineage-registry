@@ -1,14 +1,46 @@
 # RagaLineage
 
+**EAS-powered licensing that keeps guru-shishya lineage and upstream royalties alive.**
+
 RagaLineage is an EAS-backed registry for **Who Taught You That Raga?** at Road To Devcon II. It
 models verified guru-shishya lineage, commercial licenses that depend on that lineage, and
 multi-generation royalty calculations.
 
-Traditional licensing usually pays the performer it can identify. That loses the teaching lineage
-that shaped the performance and gives a platform no reliable way to distinguish a real teacher
-relationship from a unilateral claim. RagaLineage makes the lineage graph load-bearing: teachers
-must confirm claims, licenses are valid only while their captured lineage remains valid, and royalty
-recipients are calculated from the current verified graph.
+## 🚀 Live Base Sepolia Deployment
+
+> RagaLineage is live on Base Sepolia and uses the official EAS and SchemaRegistry predeploys — not
+> mocks.
+
+**Network:** Base Sepolia
+
+**Chain ID:** `84532`
+
+| Contract | Address |
+| --- | --- |
+| RagaRegistry | [`0x456a2E96430C31172Ca2f602D07b69fe0767B96a`](https://sepolia.basescan.org/address/0x456a2E96430C31172Ca2f602D07b69fe0767B96a) |
+| Official EAS | [`0x4200000000000000000000000000000000000021`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000021) |
+| Official SchemaRegistry | [`0x4200000000000000000000000000000000000020`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000020) |
+
+### EAS Schemas
+
+| Schema | UID | Resolver | Revocable |
+| --- | --- | --- | --- |
+| Lineage | `0xf044cb02b336aaa598c4d2f8530abcbf5cbfb401d87fb90f8a390975319a06bf` | Zero address | Yes |
+| Commercial license | `0x1da6bebc9d2bf5b7d427cac869f6a876cdd5ce0f29c1a8c729f3c89d0dba6c47` | Zero address | Yes |
+
+**Deployment transaction:**
+[`0x50742e...96766`](https://sepolia.basescan.org/tx/0x50742ea97db7bdbcb7df79c08dd025350541f298883e406eed5ed00c0e296766)
+
+Public deployment metadata:
+[`deployments/base-sepolia.json`](deployments/base-sepolia.json)
+
+Fresh RPC reads verified the deployed runtime bytecode, official EAS address, both immutable schema
+UIDs, both SchemaRegistry records, and the deployer's `DEFAULT_ADMIN_ROLE`. The live deployment uses
+the genuine official EAS and SchemaRegistry predeploys, not local mocks.
+
+The reproducible workflow in `script/DeployBaseSepolia.s.sol` uses untracked `PRIVATE_KEY` and
+`BASE_SEPOLIA_RPC_URL` values and rejects non-Base-Sepolia chain IDs. Neither credentials nor
+Foundry broadcast/cache output are tracked.
 
 ## Judge Quick Start
 
@@ -39,6 +71,14 @@ recorded in [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
    Guru A `1,500`, and Guru B `500`.
 6. Guru A calls `revokeLineage(devika)`; the same license now returns `InvalidLineage`, and
    `isLicenseValid(assetId, platform)` returns `false`.
+
+## Why RagaLineage
+
+Traditional licensing usually pays the performer it can identify. That loses the teaching lineage
+that shaped the performance and gives a platform no reliable way to distinguish a real teacher
+relationship from a unilateral claim. RagaLineage makes the lineage graph load-bearing: teachers
+must confirm claims, licenses are valid only while their captured lineage remains valid, and royalty
+recipients are calculated from the current verified graph.
 
 ## What is implemented
 
@@ -216,36 +256,6 @@ Expected result at this revision:
 
 The tests deploy genuine local EAS and SchemaRegistry contracts and register both schemas. They do
 not replace EAS with a mapping mock.
-
-## Live Base Sepolia deployment
-
-RagaLineage is deployed on Base Sepolia (chain ID `84532`). Public deployment metadata is also
-available in [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
-
-- Network: **Base Sepolia**
-- Chain ID: **84532**
-
-| Contract | Address |
-| --- | --- |
-| RagaRegistry | [`0x456a2E96430C31172Ca2f602D07b69fe0767B96a`](https://sepolia.basescan.org/address/0x456a2E96430C31172Ca2f602D07b69fe0767B96a) |
-| Official EAS | [`0x4200000000000000000000000000000000000021`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000021) |
-| Official SchemaRegistry | [`0x4200000000000000000000000000000000000020`](https://sepolia.basescan.org/address/0x4200000000000000000000000000000000000020) |
-
-| Schema | UID | Resolver | Revocable |
-| --- | --- | --- | --- |
-| Lineage | `0xf044cb02b336aaa598c4d2f8530abcbf5cbfb401d87fb90f8a390975319a06bf` | Zero address | Yes |
-| Commercial license | `0x1da6bebc9d2bf5b7d427cac869f6a876cdd5ce0f29c1a8c729f3c89d0dba6c47` | Zero address | Yes |
-
-The deployment transaction is
-[`0x50742e...96766`](https://sepolia.basescan.org/tx/0x50742ea97db7bdbcb7df79c08dd025350541f298883e406eed5ed00c0e296766).
-Fresh RPC reads confirmed the deployed bytecode, official EAS address, both immutable schema UIDs,
-both SchemaRegistry records, and the deployer's `DEFAULT_ADMIN_ROLE`.
-The live deployment uses the genuine official EAS and SchemaRegistry predeploys, not local mocks.
-
-The reproducible Foundry workflow is in `script/DeployBaseSepolia.s.sol`. It requires untracked
-`PRIVATE_KEY` and `BASE_SEPOLIA_RPC_URL` values; blank placeholders are provided in `.env.example`.
-The script rejects every chain except Base Sepolia. Neither credentials nor Foundry broadcast/cache
-output are tracked.
 
 ## Intentional scope and limitations
 
